@@ -1,11 +1,11 @@
-name: build android lts arm64 min 16kb
+name: build android lts arm64 audio min 16kb
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-lts-arm64-min:
-    name: build android lts arm64 min 16kb
+  build-lts-arm64-audio-min:
+    name: build android lts arm64 audio min 16kb
     runs-on: ubuntu-24.04
 
     defaults:
@@ -13,7 +13,7 @@ jobs:
         shell: bash
 
     env:
-      AAR_OUTPUT_NAME: ffmpeg-kit-lts-arm64-min-16kb.aar
+      AAR_OUTPUT_NAME: ffmpeg-kit-lts-arm64-audio-min-16kb.aar
 
     steps:
       - name: checkout
@@ -80,42 +80,93 @@ jobs:
           cmake --version || true
           gcc --version || true
 
-      - name: locate ffmpeg configure scripts
+      - name: patch ffmpeg configure for audio min
         run: |
-          set +e
+          python3 <<'PY'
+          from pathlib import Path
 
-          echo "===== possible shell scripts ====="
-          find . -type f -name "*.sh" | sort | head -300
-          find . -type f -name "*.mk" | sort | head -100
-          find . -type f -name "*.gradle" | sort | head -100
+          path = Path("scripts/android/ffmpeg.sh")
+          text = path.read_text()
 
-          echo "===== configure references ====="
-          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "configure" . | head -300
+          marker = "FFMPEG_AUDIO_MIN_FLAGS="
+          if marker in text:
+              print("audio-min patch already exists")
+              raise SystemExit(0)
 
-          echo "===== extra-ldflags references ====="
-          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "extra-ldflags" . | head -200
+          configure = "./configure \\"
+          if configure not in text:
+              raise SystemExit("Cannot find './configure \\' in scripts/android/ffmpeg.sh")
 
-          echo "===== disable-everything references ====="
-          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "disable-everything" . | head -100
+          audio_min_flags = r'''
+          FFMPEG_AUDIO_MIN_FLAGS="
+            --disable-everything
+            --disable-autodetect
+            --disable-network
+            --disable-doc
+            --disable-debug
+            --enable-avcodec
+            --enable-avformat
+            --enable-avfilter
+            --enable-swresample
+            --enable-avutil
+            --enable-protocol=file
+            --enable-demuxer=wav
+            --enable-demuxer=mov
+            --enable-demuxer=aac
+            --enable-demuxer=mp3
+            --enable-muxer=wav
+            --enable-muxer=mp4
+            --enable-muxer=ipod
+            --enable-muxer=adts
+            --enable-muxer=null
+            --enable-decoder=pcm_s16le
+            --enable-decoder=pcm_s24le
+            --enable-decoder=pcm_s32le
+            --enable-decoder=aac
+            --enable-decoder=mp3
+            --enable-decoder=mp3float
+            --enable-encoder=pcm_s16le
+            --enable-encoder=aac
+            --enable-parser=aac
+            --enable-parser=mpegaudio
+            --enable-filter=volume
+            --enable-filter=loudnorm
+            --enable-filter=alimiter
+            --enable-filter=highpass
+            --enable-filter=lowpass
+            --enable-filter=silencedetect
+            --enable-filter=silenceremove
+            --enable-filter=aformat
+            --enable-filter=aresample
+            --enable-filter=anull
+            --enable-filter=atrim
+            --enable-filter=asetpts
+            --enable-filter=afftdn
+            --enable-filter=equalizer
+            --enable-filter=acompressor
+            --enable-indev=lavfi
+          "
 
-          echo "===== enable-filter references ====="
-          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "enable-filter" . | head -100
+          echo "===== FFMPEG_AUDIO_MIN_FLAGS =====" 1>>"${BASEDIR}"/build.log 2>&1
+          echo "${FFMPEG_AUDIO_MIN_FLAGS}" 1>>"${BASEDIR}"/build.log 2>&1
 
-          echo "===== FFMPEG_CONFIGURATION references ====="
-          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "FFMPEG_CONFIGURATION" . | head -100
+          '''
 
-          echo "===== COMMON_FF_CFG_FLAGS references ====="
-          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "COMMON_FF_CFG_FLAGS" . | head -100
+          patched = text.replace(
+              configure,
+              audio_min_flags + "\n" + configure + "\n  ${FFMPEG_AUDIO_MIN_FLAGS} \\",
+              1
+          )
 
-          echo "===== FFMPEG_CFG_FLAGS references ====="
-          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "FFMPEG_CFG_FLAGS" . | head -100
+          path.write_text(patched)
 
-          echo "===== build script files around ffmpeg ====="
-          find . -type f | grep -Ei "ffmpeg|android|build" | sort | head -300
+          print("patched scripts/android/ffmpeg.sh for audio-min")
+          PY
 
-          exit 0
+          echo "===== patched ffmpeg.sh configure area ====="
+          grep -n -A 90 -B 20 "FFMPEG_AUDIO_MIN_FLAGS" scripts/android/ffmpeg.sh
 
-      - name: build native lts arm64 min 16kb without archive
+      - name: build native lts arm64 audio min 16kb without archive
         run: |
           chmod +x ./android.sh
 
@@ -218,8 +269,8 @@ jobs:
       - name: upload aar artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-kit-lts-arm64-min-16kb-aar
-          path: ffmpeg-kit-lts-arm64-min-16kb.aar
+          name: ffmpeg-kit-lts-arm64-audio-min-16kb-aar
+          path: ffmpeg-kit-lts-arm64-audio-min-16kb.aar
           if-no-files-found: error
 
       - name: print build logs
