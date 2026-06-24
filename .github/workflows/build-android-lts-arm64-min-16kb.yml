@@ -80,7 +80,7 @@ jobs:
           cmake --version || true
           gcc --version || true
 
-      - name: patch ffmpeg configure for audio min
+      - name: patch ffmpeg configure for project audio min
         run: |
           python3 <<'PY'
           from pathlib import Path
@@ -88,9 +88,9 @@ jobs:
           path = Path("scripts/android/ffmpeg.sh")
           text = path.read_text()
 
-          marker = "FFMPEG_AUDIO_MIN_FLAGS="
+          marker = "FFMPEG_PROJECT_AUDIO_MIN_FLAGS="
           if marker in text:
-              print("audio-min patch already exists")
+              print("project audio-min patch already exists")
               raise SystemExit(0)
 
           configure = "./configure \\"
@@ -98,73 +98,92 @@ jobs:
               raise SystemExit("Cannot find './configure \\' in scripts/android/ffmpeg.sh")
 
           audio_min_flags = r'''
-          FFMPEG_AUDIO_MIN_FLAGS="
+          FFMPEG_PROJECT_AUDIO_MIN_FLAGS="
             --disable-everything
             --disable-autodetect
             --disable-network
             --disable-doc
             --disable-debug
+
             --enable-avcodec
             --enable-avformat
             --enable-avfilter
             --enable-swresample
             --enable-avutil
+
             --enable-protocol=file
+            --enable-protocol=pipe
+
             --enable-demuxer=wav
             --enable-demuxer=mov
             --enable-demuxer=aac
             --enable-demuxer=mp3
+
             --enable-muxer=wav
             --enable-muxer=mp4
             --enable-muxer=ipod
             --enable-muxer=adts
             --enable-muxer=null
+
             --enable-decoder=pcm_s16le
             --enable-decoder=pcm_s24le
             --enable-decoder=pcm_s32le
             --enable-decoder=aac
             --enable-decoder=mp3
             --enable-decoder=mp3float
+
             --enable-encoder=pcm_s16le
             --enable-encoder=aac
+
             --enable-parser=aac
             --enable-parser=mpegaudio
+
+            --enable-filter=aformat
+            --enable-filter=anull
+            --enable-filter=aresample
+            --enable-filter=atrim
+            --enable-filter=asetpts
+
+            --enable-filter=silencedetect
+            --enable-filter=volumedetect
+            --enable-filter=astats
+            --enable-filter=ebur128
+
             --enable-filter=volume
             --enable-filter=loudnorm
             --enable-filter=alimiter
+
             --enable-filter=highpass
             --enable-filter=lowpass
-            --enable-filter=silencedetect
-            --enable-filter=silenceremove
-            --enable-filter=aformat
-            --enable-filter=aresample
-            --enable-filter=anull
-            --enable-filter=atrim
-            --enable-filter=asetpts
-            --enable-filter=afftdn
             --enable-filter=equalizer
+
+            --enable-filter=afftdn
+            --enable-filter=agate
             --enable-filter=acompressor
+            --enable-filter=deesser
+            --enable-filter=anlmdn
+            --enable-filter=silenceremove
+
             --enable-indev=lavfi
           "
 
-          echo "===== FFMPEG_AUDIO_MIN_FLAGS =====" 1>>"${BASEDIR}"/build.log 2>&1
-          echo "${FFMPEG_AUDIO_MIN_FLAGS}" 1>>"${BASEDIR}"/build.log 2>&1
+          echo "===== FFMPEG_PROJECT_AUDIO_MIN_FLAGS =====" 1>>"${BASEDIR}"/build.log 2>&1
+          echo "${FFMPEG_PROJECT_AUDIO_MIN_FLAGS}" 1>>"${BASEDIR}"/build.log 2>&1
 
           '''
 
           patched = text.replace(
               configure,
-              audio_min_flags + "\n" + configure + "\n  ${FFMPEG_AUDIO_MIN_FLAGS} \\",
+              audio_min_flags + "\n" + configure + "\n  ${FFMPEG_PROJECT_AUDIO_MIN_FLAGS} \\",
               1
           )
 
           path.write_text(patched)
-
-          print("patched scripts/android/ffmpeg.sh for audio-min")
+          print("patched scripts/android/ffmpeg.sh for project audio-min")
           PY
 
           echo "===== patched ffmpeg.sh configure area ====="
-          grep -n -A 90 -B 20 "FFMPEG_AUDIO_MIN_FLAGS" scripts/android/ffmpeg.sh
+          grep -n -A 120 -B 20 "FFMPEG_PROJECT_AUDIO_MIN_FLAGS" scripts/android/ffmpeg.sh
 
       - name: build native lts arm64 audio min 16kb without archive
         run: |
