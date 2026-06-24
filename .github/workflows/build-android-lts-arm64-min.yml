@@ -1,0 +1,170 @@
+name: build android lts arm64 min 16kb
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-lts-arm64-min:
+    name: build android lts arm64 min 16kb
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      ANDROID_NDK_VERSION: r27d
+      AAR_OUTPUT_NAME: ffmpeg-kit-lts-arm64-min-16kb.aar
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: set up jdk 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf \
+            automake \
+            autogen \
+            autopoint \
+            bison \
+            build-essential \
+            cmake \
+            dash \
+            gawk \
+            gettext \
+            git-core \
+            gperf \
+            libtool \
+            make \
+            nasm \
+            ninja-build \
+            pkg-config \
+            python3 \
+            ragel \
+            texinfo \
+            unzip \
+            wget \
+            yasm \
+            zip \
+            binutils
+
+      - name: set up android ndk r27d
+        run: |
+          curl -L -s "https://dl.google.com/android/repository/android-ndk-r27d-linux.zip" -o ndk.zip
+          unzip -q -o ndk.zip -d .ndk
+          echo "ANDROID_NDK_ROOT=$PWD/.ndk/$(ls .ndk)" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$PWD/.ndk/$(ls .ndk)" >> $GITHUB_ENV
+
+      - name: show environment
+        run: |
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          cmake --version || true
+          gcc --version || true
+
+      - name: build lts arm64 min 16kb
+        run: |
+          chmod +x ./android.sh
+
+          ./android.sh \
+            --lts \
+            --disable-arm-v7a \
+            --disable-x86 \
+            --disable-x86-64 \
+            --enable-android-zlib
+
+      - name: find and rename aar
+        run: |
+          echo "Searching AAR outputs..."
+          find prebuilt -type f -name "*.aar" -print || true
+
+          AAR_PATH=$(find prebuilt -type f -name "ffmpeg-kit.aar" | head -n 1)
+
+          if [ -z "$AAR_PATH" ]; then
+            echo "Error: ffmpeg-kit.aar not found in prebuilt directory."
+            exit 1
+          fi
+
+          echo "AAR_PATH=$AAR_PATH"
+          cp "$AAR_PATH" "$AAR_OUTPUT_NAME"
+
+          ls -lh "$AAR_OUTPUT_NAME"
+
+      - name: inspect aar native libraries
+        run: |
+          rm -rf aar-check
+          mkdir aar-check
+          unzip -q "$AAR_OUTPUT_NAME" -d aar-check
+
+          echo "Native libraries:"
+          find aar-check -name "*.so" -type f -print | sort
+
+          echo "Native library sizes:"
+          find aar-check -name "*.so" -type f -exec ls -lh {} \; | sort -k 5 -h
+
+      - name: verify 16kb alignment
+        run: |
+          set -e
+
+          SO_FILES=$(find aar-check -name "*.so" -type f)
+
+          if [ -z "$SO_FILES" ]; then
+            echo "Error: no .so files found in AAR."
+            exit 1
+          fi
+
+          FAILED=0
+
+          for so in $SO_FILES; do
+            echo "==== $so ===="
+            readelf -l "$so" | grep LOAD || true
+
+            if readelf -l "$so" | grep LOAD | grep -q "0x1000"; then
+              echo "Error: $so contains 4KB LOAD alignment."
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "16KB alignment verification failed."
+            exit 1
+          fi
+
+          echo "16KB alignment verification passed."
+
+      - name: upload aar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-kit-lts-arm64-min-16kb-aar
+          path: ffmpeg-kit-lts-arm64-min-16kb.aar
+          if-no-files-found: error
+
+      - name: print build log
+        if: always()
+        run: |
+          if [ -f build.log ]; then
+            cat build.log
+          else
+            echo "build.log not found"
+          fi
+
+      - name: print ffbuild config log
+        if: failure()
+        run: |
+          if [ -f ./src/ffmpeg/ffbuild/config.log ]; then
+            tail -1000 ./src/ffmpeg/ffbuild/config.log
+          else
+            echo "ffbuild config.log not found"
+          fi
