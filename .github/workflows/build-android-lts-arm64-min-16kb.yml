@@ -80,6 +80,35 @@ jobs:
           cmake --version || true
           gcc --version || true
 
+      - name: locate ffmpeg configure scripts
+        run: |
+          echo "===== possible shell scripts ====="
+          find . -type f \( -name "*.sh" -o -name "*.mk" -o -name "*.gradle" \) | sort | head -500
+
+          echo "===== configure references ====="
+          grep -R "configure" -n . | head -300 || true
+
+          echo "===== extra-ldflags references ====="
+          grep -R "extra-ldflags" -n . || true
+
+          echo "===== disable-everything references ====="
+          grep -R "disable-everything" -n . || true
+
+          echo "===== enable-filter references ====="
+          grep -R "enable-filter" -n . || true
+
+          echo "===== FFMPEG_CONFIGURATION references ====="
+          grep -R "FFMPEG_CONFIGURATION" -n . || true
+
+          echo "===== COMMON_FF_CFG_FLAGS references ====="
+          grep -R "COMMON_FF_CFG_FLAGS" -n . || true
+
+          echo "===== FFMPEG_CFG_FLAGS references ====="
+          grep -R "FFMPEG_CFG_FLAGS" -n . || true
+
+          echo "===== build script files around ffmpeg ====="
+          find . -type f | grep -Ei "ffmpeg|android|build" | sort | head -500
+
       - name: build native lts arm64 min 16kb without archive
         run: |
           chmod +x ./android.sh
