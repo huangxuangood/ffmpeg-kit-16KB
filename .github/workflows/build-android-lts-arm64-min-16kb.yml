@@ -1,4 +1,4 @@
-name: build android lts arm64 min 16kb new
+name: build android lts arm64 min 16kb
 
 on:
   workflow_dispatch:
@@ -80,28 +80,42 @@ jobs:
           cmake --version || true
           gcc --version || true
 
-      - name: build lts arm64 min 16kb
+      - name: build native lts arm64 min 16kb without archive
         run: |
           chmod +x ./android.sh
 
           ./android.sh \
             --lts \
+            --no-archive \
             --disable-arm-v7a \
             --disable-arm-v7a-neon \
             --disable-x86 \
             --disable-x86-64 \
             --enable-android-zlib
 
+      - name: manually build aar without unit tests
+        run: |
+          cd android
+
+          chmod +x ./gradlew
+
+          ./gradlew \
+            ffmpeg-kit-android-lib:clean \
+            ffmpeg-kit-android-lib:assembleRelease \
+            --no-daemon \
+            --stacktrace \
+            --info
+
       - name: find and rename aar
         run: |
           echo "Searching AAR outputs..."
+          find android -type f -name "*.aar" -print || true
           find prebuilt -type f -name "*.aar" -print || true
-          find . -type f -name "*.aar" -print || true
 
-          AAR_PATH=$(find prebuilt -type f -name "ffmpeg-kit.aar" | head -n 1)
+          AAR_PATH=$(find android/ffmpeg-kit-android-lib/build/outputs/aar -type f -name "*release*.aar" | head -n 1)
 
           if [ -z "$AAR_PATH" ]; then
-            echo "Error: ffmpeg-kit.aar not found in prebuilt directory."
+            echo "Error: release AAR not found."
             exit 1
           fi
 
@@ -189,14 +203,11 @@ jobs:
             tail -300 "$f" || true
           done
 
-          echo "===== prebuilt tree ====="
-          find prebuilt -maxdepth 5 -type f -print || true
-
           echo "===== aar outputs ====="
           find . -name "*.aar" -type f -print || true
 
-          echo "===== android build files ====="
-          find . -path "*ffmpeg-kit-android-lib*" -maxdepth 8 -type f -print | head -300 || true
+          echo "===== android build output tree ====="
+          find android/ffmpeg-kit-android-lib/build -maxdepth 8 -type f -print | head -500 || true
 
       - name: print ffbuild config log
         if: failure()
