@@ -1,4 +1,4 @@
-name: build android lts arm64 min 16kb
+name: build android lts arm64 min 16kb new
 
 on:
   workflow_dispatch:
