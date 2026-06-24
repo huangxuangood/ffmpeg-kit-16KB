@@ -1,0 +1,103 @@
+name: Build Android ffmpeg-kit audio-min 16KB
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-22.04
+
+    env:
+      ANDROID_API_LEVEL: 24
+      ANDROID_NDK_VERSION: 28.0.13004108
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}" >> $GITHUB_ENV
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            build-essential \
+            cmake \
+            git \
+            libtool \
+            make \
+            nasm \
+            pkg-config \
+            python3 \
+            unzip \
+            wget \
+            yasm \
+            zip
+
+      - name: Show environment
+        run: |
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          ls -la
+
+      - name: Find Android build scripts
+        run: |
+          find . -maxdepth 4 -iname "*android*" -type f
+          find . -maxdepth 4 -iname "*.sh" -type f
+
+      - name: Build Android arm64-v8a audio-min
+        run: |
+          chmod +x ./android.sh || true
+
+          export LDFLAGS="$LDFLAGS -Wl,-z,max-page-size=16384"
+          export CFLAGS="$CFLAGS"
+          export CXXFLAGS="$CXXFLAGS"
+
+          ./android.sh \
+            --lts \
+            --disable-arm-v7a \
+            --disable-x86 \
+            --disable-x86-64
+
+      - name: Find AAR outputs
+        if: always()
+        run: |
+          find . -iname "*.aar" -type f -print
+          find . -iname "*.so" -type f | head -200
+
+      - name: Verify 16KB alignment
+        if: always()
+        run: |
+          sudo apt-get install -y binutils
+          find . -path "*arm64-v8a*.so" -type f | while read so; do
+            echo "==== $so ===="
+            readelf -l "$so" | grep LOAD || true
+          done
+
+      - name: Upload AAR artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ffmpeg-kit-android-audio-min-16kb
+          path: |
+            **/*.aar
+            **/build/outputs/**/*.aar
