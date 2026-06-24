@@ -82,32 +82,38 @@ jobs:
 
       - name: locate ffmpeg configure scripts
         run: |
+          set +e
+
           echo "===== possible shell scripts ====="
-          find . -type f \( -name "*.sh" -o -name "*.mk" -o -name "*.gradle" \) | sort | head -500
+          find . -type f -name "*.sh" | sort | head -300
+          find . -type f -name "*.mk" | sort | head -100
+          find . -type f -name "*.gradle" | sort | head -100
 
           echo "===== configure references ====="
-          grep -R "configure" -n . | head -300 || true
+          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "configure" . | head -300
 
           echo "===== extra-ldflags references ====="
-          grep -R "extra-ldflags" -n . || true
+          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "extra-ldflags" . | head -200
 
           echo "===== disable-everything references ====="
-          grep -R "disable-everything" -n . || true
+          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "disable-everything" . | head -100
 
           echo "===== enable-filter references ====="
-          grep -R "enable-filter" -n . || true
+          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "enable-filter" . | head -100
 
           echo "===== FFMPEG_CONFIGURATION references ====="
-          grep -R "FFMPEG_CONFIGURATION" -n . || true
+          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "FFMPEG_CONFIGURATION" . | head -100
 
           echo "===== COMMON_FF_CFG_FLAGS references ====="
-          grep -R "COMMON_FF_CFG_FLAGS" -n . || true
+          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "COMMON_FF_CFG_FLAGS" . | head -100
 
           echo "===== FFMPEG_CFG_FLAGS references ====="
-          grep -R "FFMPEG_CFG_FLAGS" -n . || true
+          grep -RIn --exclude-dir=.git --exclude-dir=.gradle --exclude-dir=build "FFMPEG_CFG_FLAGS" . | head -100
 
           echo "===== build script files around ffmpeg ====="
-          find . -type f | grep -Ei "ffmpeg|android|build" | sort | head -500
+          find . -type f | grep -Ei "ffmpeg|android|build" | sort | head -300
+
+          exit 0
 
       - name: build native lts arm64 min 16kb without archive
         run: |
